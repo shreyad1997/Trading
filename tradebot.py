@@ -1,25 +1,22 @@
-
-pip install vaderSentiment
+import yfinance as yf
 import requests
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-from collections import defaultdict
-import yfinance as yf
 import pandas as pd
 import numpy as np
 
-# Define an expansive watchlist
-expansive_watchlist = [
-    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA',
-     'NFLX', 'NVDA', 'BABA', 'V', 'SPY', "BRK.B","VOO","DT", "PLTR","UBER","AMC","IBM","META"
-    # Add more stocks as needed
-]
+# Fetch stock data using Yahoo Finance
+def fetch_stock_data_yahoo(stock_symbol):
+    stock = yf.Ticker(stock_symbol)
+    data = stock.history(period='1d', interval='5m')  # Fetch intraday 5-minute data for 1 day
+    return data
 
-def fetch_alpha_vantage_news(stock_symbol):
-    api_key = 'UDV6EF6GVUCM3E5O'
-    url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={stock_symbol}&apikey={api_key}'
+# NewsAPI to fetch news and analyze sentiment
+def fetch_newsapi_news(stock_symbol):
+    api_key = 'insert_api_key'  # Replace with your NewsAPI key
+    url = f'https://newsapi.org/v2/everything?q={stock_symbol}&apiKey={api_key}'
     response = requests.get(url)
-    articles = response.json().get('feed', [])
-
+    articles = response.json().get('articles', [])
+    
     headlines = [article['title'] for article in articles]
     return headlines
 
@@ -28,47 +25,30 @@ def analyze_sentiment(headlines):
     scores = [analyzer.polarity_scores(headline)['compound'] for headline in headlines]
     return sum(scores) / len(scores) if scores else 0
 
+# Analyze news trends and rank stocks
 def analyze_trends(stock_symbols):
-    stock_trends = defaultdict(dict)
+    stock_trends = {}
 
     for stock in stock_symbols:
-        headlines = fetch_alpha_vantage_news(stock)
+        headlines = fetch_newsapi_news(stock)
         if not headlines:
             print(f"No headlines found for {stock}.")
             continue
         sentiment_score = analyze_sentiment(headlines)
-
-        # Count keyword occurrences in headlines
-        reasons = defaultdict(int)
-        for headline in headlines:
-            if "earnings" in headline.lower():
-                reasons["Earnings"] += 1
-            if "acquisition" in headline.lower():
-                reasons["Acquisition"] += 1
-            if "launch" in headline.lower():
-                reasons["Product Launch"] += 1
-            # Add more keywords as needed
-
-        # Store the results
-        stock_trends[stock]['mentions'] = len(headlines)
-        stock_trends[stock]['sentiment'] = sentiment_score
-        stock_trends[stock]['reasons'] = reasons
-
-        print(stock_trends)
-
+        stock_trends[stock] = {
+            'sentiment': sentiment_score,
+            'mentions': len(headlines)
+        }
+    
     return stock_trends
 
 def rank_trending_stocks(stock_trends):
-    # Rank based on mentions and sentiment
     ranked_stocks = sorted(stock_trends.items(), key=lambda x: (x[1]['mentions'], x[1]['sentiment']), reverse=True)
     return ranked_stocks[:5]  # Return top 5 stocks
 
-# Function to run the strategy for each stock
+# Technical analysis using Yahoo Finance data
 def calculate_sma(data, window):
     return data.rolling(window=window).mean()
-
-def calculate_ema(data, window):
-    return data.ewm(span=window, adjust=False).mean()
 
 def calculate_rsi(data, window=14):
     delta = data.diff(1)
@@ -118,8 +98,9 @@ def get_buy_sell_signals(data):
 
     return buy_signals, sell_signals
 
-def run_strategy(stock):
-    data = yf.download(stock, interval='5m', period='1d')
+# Run strategy using Yahoo Finance stock data
+def run_strategy(stock_symbol):
+    data = fetch_stock_data_yahoo(stock_symbol)
     data['SMA_50'] = calculate_sma(data['Close'], 50)
     data['SMA_200'] = calculate_sma(data['Close'], 200)
     data['RSI'] = calculate_rsi(data['Close'])
@@ -131,18 +112,50 @@ def run_strategy(stock):
     data['Sell_Signal'] = sell_signals
     return data[['Close', 'Buy_Signal', 'Sell_Signal']]
 
-# Analyze trends in the expansive watchlist
+# Simulate investments based on buy/sell signals for one run
+def simulate_investment_run(top_stocks, budget, run_name):
+    # Allocate the budget across buy signals
+    investment_plan = {}
+    buy_signals_stocks = [stock for stock in top_stocks if stock['buy_signal']]
+    
+    if buy_signals_stocks:
+        portion_per_stock = budget / len(buy_signals_stocks)
+        for stock in buy_signals_stocks:
+            investment_plan[stock['symbol']] = portion_per_stock
+    
+    # Print investment recommendations
+    print(f"\nInvestment Recommendations for {run_name}:")
+    if investment_plan:
+        for stock, amount in investment_plan.items():
+            print(f"Buy ${amount:.2f} worth of {stock}")
+    else:
+        print("No Buy Signals today.")
+    
+    # Print sell recommendations
+    for stock in top_stocks:
+        if stock['sell_signal']:
+            print(f"Sell {stock['symbol']} based on Sell Signal.")
+
+# Example usage:
+
+expansive_watchlist = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']
+
+# Step 1: Analyze trends based on news sentiment
 stock_trends = analyze_trends(expansive_watchlist)
 
-# Get the top 5 trending stocks
-top_stocks = rank_trending_stocks(stock_trends)
+# Step 2: Rank the top 5 trending stocks
+top_stocks_info = rank_trending_stocks(stock_trends)
 
-# Run the strategy for the top trending stocks
-for stock, _ in top_stocks:
+# Step 3: Get technical analysis for top trending stocks
+top_stocks_with_signals = []
+for stock, _ in top_stocks_info:
     result = run_strategy(stock)
-    print(f"Results for {stock}:\n", result.dropna(how='all').to_string())
+    result_with_signals = {
+        'symbol': stock,
+        'buy_signal': not result['Buy_Signal'].isna().all(),
+        'sell_signal': not result['Sell_Signal'].isna().all()
+    }
+    top_stocks_with_signals.append(result_with_signals)
 
-
-
-
-
+# Step 4: Simulate a single run (e.g., "Run 1, Week 1")
+simulate_investment_run(top_stocks_with_signals, budget=125, run_name="Run 1, Week 1")
