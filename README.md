@@ -5,12 +5,15 @@ This Python script simulates an investment strategy using news sentiment analysi
 Key Features:
 
 •	Yahoo Finance (yfinance): Used to fetch real-time and historical stock data.
+
 •	NewsAPI: Fetches news headlines for stocks, and sentiment analysis is performed using the VADER Sentiment Intensity Analyzer.
+
 •	Technical Analysis: The script calculates technical indicators such as:
   •	Simple Moving Average (SMA)
   •	Relative Strength Index (RSI)
   •	Moving Average Convergence Divergence (MACD)
   •	Bollinger Bands
+  
 •	Investment Simulation: Based on the buy/sell signals from the technical analysis, the script suggests investment actions for a specific weekly run.
 
 How It Works:
